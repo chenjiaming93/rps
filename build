@@ -4,6 +4,10 @@ dest=$here/_build
 mkdir -p $dest
 cp $here/favicon.ico $dest
 cp $here/404.html $dest
-sed 's/src="rps.js/src="rps.min.js/' $here/index.html >$dest/index.html
-uglifyjs -c -m --source-map=$dest/rps.min.js.map --source-map-url=rps.min.js.map -o $dest/rps.min.js $here/rps.js
+if (( $+commands[uglifyjs] )); then
+    sed 's/src="rps.js/src="rps.min.js/' $here/index.html >$dest/index.html
+    uglifyjs -c -m --source-map=$dest/rps.min.js.map --source-map-url=rps.min.js.map -o $dest/rps.min.js $here/rps.js
+else
+    cp $here/index.html $here/rps.js $dest
+fi
 rsync -r --exclude=README.md $here/static $dest

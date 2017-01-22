@@ -35,9 +35,12 @@ Static files can be built with
 ```
 
 You can now serve the `_build` directory with whatever web server you
-choose. Note that you may need to modify the port number in `rps.js`
-before running the build script if the port specified in `conf.ini` is
-not 8443.
+choose. Note that
+
+- [UglifyJS](https://www.npmjs.com/package/uglify-js) is a recommended
+  dependency of the build script;
+- You may need to modify the port number in `rps.js` before running the build
+  script if the port specified in `conf.ini` is not 8443.
 
 ## Notes
 
