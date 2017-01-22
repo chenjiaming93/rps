@@ -523,7 +523,7 @@ def spawn_bot(user):
         'Gabriel Tosh',
         'Gerard DuGalle',
         'Horace Warfield',
-        'Jim Raynors',
+        'Jim Raynor',
         'Karax',
         'Matt Horner',
         'Nova Terra',
