@@ -488,8 +488,21 @@ async def matchmaker():
         if waiting is not None:
             # Make sure waiting is still alive
             await user_cmd_queues[waiting.uid].put({'action': 'livecheck'})
-            user, live = await matchmaker_livecheck_queue.get()
-            assert user.uid == waiting.uid
+            try:
+                while True:
+                    user, live = await asyncio.wait_for(matchmaker_livecheck_queue.get(),
+                                                        timeout=10)
+                    if user.uid != waiting.uid:
+                        logger.warning(f'matchmaker: livechecking {waiting} '
+                                       f'but heard from {user} instead; ignored')
+                        continue
+                    else:
+                        break
+            except asyncio.TimeoutError:
+                # Hasn't heard back from livecheck in ten seconds,
+                # assume the connection has dropped
+                live = False
+
             if not live:
                 waiting = new_user
                 continue
