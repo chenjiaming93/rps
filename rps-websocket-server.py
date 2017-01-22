@@ -461,6 +461,16 @@ async def user_session(ws, path):
                 break
     except websockets.exceptions.ConnectionClosed:
         pass
+    except TimeoutError:
+        # Sometimes there's an uncaught TimeoutError lower down in
+        # asyncio/selector_events.py:724:
+        #
+        #     data = self._sock.recv(self.max_size)
+        #
+        # Kind of a leak in the websockets package.
+        logger.warning(f'{me}: uncaught TimeoutError')
+        # Send a leave message to the judge just to be safe.
+        judge_queue.put((me, 'leave'))
     finally:
         await ws.close()
         logger.info(f'dropped {me}')
