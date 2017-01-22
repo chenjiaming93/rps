@@ -513,6 +513,22 @@ async def judge():
             # judge be brought down.
             logger.warning(f'judge: received move from dropped uid {user.uid}')
             continue
+
+        # Similarly, we check to make sure opponent still exists
+        if opponent.uid not in opponents:
+            # Opponent doesn't exist anymore! And somehow did not send a
+            # farewell message or the message was somehow eaten. Damn.
+            logger.warning(f'judge: the opponent {opponent} of {user}'
+                           f'appears to have been dropped')
+            game = games[user.uid]
+            game.winner = user
+            game.special = 'leave'
+            outstanding.pop(opponent.uid, None)
+            games.pop(user.uid, None)
+            games.pop(opponent.uid, None)
+            await user_cmd_queues[user.uid].put({'action': 'endgame'})
+            continue
+
         if opponent.uid in outstanding:
             u1 = user
             move1 = move
