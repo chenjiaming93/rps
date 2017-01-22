@@ -57,6 +57,12 @@ not 8443.
   WebSocket server can be changed at will though, as long as `rps.js`
   knows where to find the host.)
 
+- An autoplay bot is trivial to implement:
+
+  ```js
+  setInterval(function () { var move = Math.floor(Math.random() * 3); $('.button.clickable[data-move=' + move + ']').click(); }, 1000)
+  ```
+
 ## Screenshots
 
 Google Chrome:
