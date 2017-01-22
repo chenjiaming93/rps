@@ -661,7 +661,7 @@ async def judge():
         if opponent.dropped:
             # Opponent has been dropped! And somehow they did not send a
             # farewell message or the message was somehow eaten. Damn.
-            logger.warning(f'judge: the opponent {opponent} of {user}'
+            logger.warning(f'judge: the opponent {opponent} of {user} '
                            f'appears to have been dropped')
             user.game.winner = user
             user.game.special = 'leave'
