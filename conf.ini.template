@@ -1,0 +1,17 @@
+[server]
+
+# Port to bind to; defaults to 8080 when enable_ssl is false, and 8443 when
+# enable_ssl is true.
+port = 8080
+
+[ssl]
+
+# Whether to enable SSL (wss scheme); defaults to false.
+enable_ssl = false
+
+# Path to the SSL cert, e.g., /etc/letsencrypt/live/example.com/cert.pem.
+certfile =
+
+# Path to the private key for the certificate, if it is not bundled in the
+# cert, e.g.  /etc/letsencrypt/live/example.com/privkey.pem.
+keyfile =

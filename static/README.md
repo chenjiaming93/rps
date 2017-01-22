@@ -1,0 +1,3 @@
+- jQuery v3.1.1 (MIT)
+- js-cookie v2.1.3 (MIT)
+- qTip2 v3.0.3 (MIT)

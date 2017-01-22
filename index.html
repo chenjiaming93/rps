@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rock Paper Scissors</title>
+  <style>
+    /*! normalize.css v5.0.0 | MIT License | github.com/necolas/normalize.css */button,hr,input{overflow:visible}audio,canvas,progress,video{display:inline-block}progress,sub,sup{vertical-align:baseline}[type=checkbox],[type=radio],legend{box-sizing:border-box;padding:0}html{font-family:sans-serif;line-height:1.15;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%}body{margin:0}article,aside,details,figcaption,figure,footer,header,main,menu,nav,section{display:block}h1{font-size:2em;margin:.67em 0}figure{margin:1em 40px}hr{box-sizing:content-box;height:0}code,kbd,pre,samp{font-family:monospace,monospace;font-size:1em}a{background-color:transparent;-webkit-text-decoration-skip:objects}a:active,a:hover{outline-width:0}abbr[title]{border-bottom:none;text-decoration:underline;text-decoration:underline dotted}b,strong{font-weight:bolder}dfn{font-style:italic}mark{background-color:#ff0;color:#000}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative}sub{bottom:-.25em}sup{top:-.5em}audio:not([controls]){display:none;height:0}img{border-style:none}svg:not(:root){overflow:hidden}button,input,optgroup,select,textarea{font-family:sans-serif;font-size:100%;line-height:1.15;margin:0}button,select{text-transform:none}[type=reset],[type=submit],button,html [type=button]{-webkit-appearance:button}[type=button]::-moz-focus-inner,[type=reset]::-moz-focus-inner,[type=submit]::-moz-focus-inner,button::-moz-focus-inner{border-style:none;padding:0}[type=button]:-moz-focusring,[type=reset]:-moz-focusring,[type=submit]:-moz-focusring,button:-moz-focusring{outline:ButtonText dotted 1px}fieldset{border:1px solid silver;margin:0 2px;padding:.35em .625em .75em}legend{color:inherit;display:table;max-width:100%;white-space:normal}textarea{overflow:auto}[type=number]::-webkit-inner-spin-button,[type=number]::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}[type=search]::-webkit-search-cancel-button,[type=search]::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}[hidden],template{display:none}
+
+    /*! jquery.qtip.min.css v3.0.3 | MIT License | qtip2.com | slimmed down for my needs */.qtip{position:absolute;left:-28000px;top:-28000px;display:none;max-width:280px;min-width:50px;font-size:10.5px;line-height:12px;direction:ltr;box-shadow:none;padding:0}.qtip-content,.qtip-titlebar{position:relative;overflow:hidden}.qtip-content{padding:5px 9px;text-align:left;word-wrap:break-word}.qtip-titlebar{padding:5px 35px 5px 10px;border-width:0 0 1px;font-weight:700}.qtip-titlebar+.qtip-content{border-top-width:0!important}.qtip-close{position:absolute;right:-9px;top:-9px;z-index:11;cursor:pointer;outline:0;border:1px solid transparent}.qtip-titlebar .qtip-close{right:4px;top:50%;margin-top:-9px}* html .qtip-titlebar .qtip-close{top:16px}.qtip-icon .ui-icon,.qtip-titlebar .ui-icon{display:block;text-indent:-1000em;direction:ltr}.qtip-icon,.qtip-icon .ui-icon{-moz-border-radius:3px;-webkit-border-radius:3px;border-radius:3px;text-decoration:none}.qtip-icon .ui-icon{width:18px;height:14px;line-height:14px;text-align:center;text-indent:0;font:normal 700 10px/13px Tahoma,sans-serif;color:inherit;background:-100em -100em no-repeat}/*! Light tooltip style */.qtip-light{background-color:#fff;border-color:#E2E2E2;color:#454545}.qtip-light .qtip-titlebar{background-color:#f1f1f1}.qtip-shadow{-webkit-box-shadow:1px 1px 3px 1px rgba(0,0,0,.15);-moz-box-shadow:1px 1px 3px 1px rgba(0,0,0,.15);box-shadow:1px 1px 3px 1px rgba(0,0,0,.15)}
+
+    html, body, main { width: 100%; height: 100%; }
+    body { margin: 0; font-family: 'Times New Roman', Times, serif; }
+    .flex { display: flex; }
+    .flex-column { display: flex; flex-direction: column; }
+    .flex-center { display: flex; align-items: center; justify-content: center; }
+    .flex-end { display: flex; align-items: center; justify-content: flex-end; }
+    .auto-child { flex: 1; }
+    .fixed-child { flex: none; }
+    .row-reverse { flex-direction: row-reverse; }
+    body.flex-center { justify-content: space-between; }
+    header { text-align: center; }
+    footer { font-size: 80%; color: #aaa; height: 30px; margin-top: 30px; }
+    footer a { color: inherit; }
+    h1 { font-size: 150%; height: 30px; margin: 30px 0 10px 0; }
+    header .menu { font-size: 80%; }
+    header .menu span { margin: 0 5px; text-decoration: underline; }
+    .help:hover { cursor: help; }
+    .clickable:hover { cursor: pointer; }
+    #logon-form { width: 250px; text-align: center; }
+    input { width: 100%; font-family: inherit; font-size: inherit; }
+    input:not([type]), input[type=text] { padding: 5px; margin: 10px 0; display: inline-block; border: 1px solid #ddd; box-sizing: border-box; }
+    input[type=submit] { background: #ddd; padding: 5px 0; border: none; border-radius: 2px; cursor: pointer; }
+    input[type=submit]:hover { background: #ccc; }
+    #waiting { text-align: center; line-height: 150%; }
+    #game-container { height: 240px; }
+    #game-subcontainer { height: 200px; }
+    #user-name, #opponent-name { max-width: 100px; white-space: nowrap; }
+    #user-name { direction: rtl; /* overflows to the left */ }
+    #user-score-column, #opponent-score-column { width: 50px; height: 100%; }
+    #user-score-row, #opponent-score-row, #separator-row { height: 25%; }
+    #user-score, #opponent-score { width: 25px; text-align: center; font-size: 24px; position: relative; top: 1px; }
+    #separator-column { width: 30px; height: 100%; }
+    #separator { font-size: 24px; position: relative; top: -1px; }
+    #timer { width: 20px; height: 20px; border: dotted 1px #000; border-radius: 50%; text-align: center; }
+    .button { width: 80px; padding: 10px; border: solid 1px #000; text-align: center; }
+    .button.disabled { color: #999; border-color: #999; }
+    .button.clickable:hover { background: #eee; }
+    html.touch .button.clickable:hover { background: inherit; }
+    .button.selected { background: #eee; }
+    #toolbar { margin-top: 10px; }
+    #toolbar span { font-size: 80%; text-decoration: underline; }
+    #page-cover { position: fixed; z-index: 50; top: 0; left: 0; width: 100%; height: 100%; background: #000; opacity: 0.5; }
+    #popover { position: fixed; z-index: 100; top: 50%; left: 50%; transform: translate(-50%, -50%); -webkit-transform: translate(-50%, -50%); width: 300px; padding: 50px 0; background: #ddd; text-align: center; border-radius: 10px; line-height: 120%; }
+  </style>
+  <script src="static/jquery.min.js"></script>
+  <script src="static/js.cookie.min.js"></script>
+  <script src="static/jquery.qtip.min.js" async></script>
+  <script src="rps.js?v=1.0dev1" async></script>
+</head>
+<body class="flex-center flex-column">
+  <header class="fixed-child">
+    <h1>Rock Paper Scissors</h1>
+    <div class="menu">
+      <span id="rule" class="help" title="The first to score 10 points by a two-point margin wins.">Rule</span>
+      <span id="quit" class="clickable" title="Leave app">Quit</span>
+      <span id="logoff" class="clickable" title="Leave app and forget saved name">Logoff</span>
+    </div>
+  </header>
+
+  <form id="logon-form" class="fixed-child">
+    <label for="name">Please enter your name to log on:</label>
+    <input type="text" name="name">
+    <input type="submit" value="submit" style="visibility:hidden">
+  </form>
+
+  <div id="waiting" class="fixed-child" style="display:none"></div>
+
+  <div id="game-container" class="flex-column fixed-child" style="display:none">
+    <div id="game-subcontainer" class="flex fixed-child">
+      <div id="user-choices-container" class="flex-column auto-child">
+        <div id="user-name-row" class="flex-end auto-child"><span id="user-name"></span></div>
+        <div class="flex-end auto-child"><span class="button disabled" data-move="0">Rock</span></div>
+        <div class="flex-end auto-child"><span class="button disabled" data-move="1">Paper</span></div>
+        <div class="flex-end auto-child"><span class="button disabled" data-move="2">Scissors</span></div>
+      </div>
+
+      <div id="user-score-column" class="flex-column fixed-child">
+        <div id="user-score-row" class="flex-end fixed-child"><span id="user-score" class="fixed-child"></span></div>
+      </div>
+
+      <div id="separator-column" class="flex-column fixed-child">
+        <div id="separator-row" class="flex-center fixed-child"><span id="separator">:</span></div>
+        <div id="timer-container" class="flex-center auto-child">
+          <span id="timer" class="fixed-child help" title="Countdown timer"></span>
+        </div>
+      </div>
+
+      <div id="opponent-score-column" class="flex-column fixed-child">
+        <div id="opponent-score-row" class="flex-end fixed-child row-reverse"><span id="opponent-score" class="fixed-child"></span></div>
+      </div>
+
+      <div id="opponent-choices-container" class="flex-column auto-child">
+        <div id="opponent-name-row" class="flex-end auto-child row-reverse"><span id="opponent-name"></span></div>
+        <div class="flex-end auto-child row-reverse"><span class="button disabled" data-move="0">Rock</span></div>
+        <div class="flex-end auto-child row-reverse"><span class="button disabled" data-move="1">Paper</span></div>
+        <div class="flex-end auto-child row-reverse"><span class="button disabled" data-move="2">Scissors</span></div>
+      </div>
+    </div>
+
+    <div id="toolbar" class="flex-center fixed-child">
+      <span id="surrender" class="clickable">Surrender</span>
+    </div>
+  </div>
+
+  <div id="page-cover" style="display:none"></div>
+  <div id="popover" style="display:none"></div>
+  <footer class="fixed-child">&copy; 2017 <a href="https://github.com/fanaticscripter" target="_blank">@fanaticscripter</a>. <a href="https://github.com/fanaticscripter/rps" target="_blank">Source code</a>.</footer>
+</body>
+</html>
