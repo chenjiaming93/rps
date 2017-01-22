@@ -167,10 +167,10 @@ async def wait_for_message(ws, expected_action,
             else:
                 resp = await ws.recv()
         except websockets.exceptions.ConnectionClosed:
-            logger.warning(f'{msg_prefix}connection closed')
+            logger.info(f'{msg_prefix}connection closed')
             return None
         except asyncio.TimeoutError:
-            logger.warning(f'{msg_prefix}expected action "{expected_action}" timed out')
+            logger.debug(f'{msg_prefix}expected action "{expected_action}" timed out')
             return {}
 
         try:
@@ -181,8 +181,8 @@ async def wait_for_message(ws, expected_action,
             continue
 
         if 'action' in resp and resp['action'] in interrupters:
-            logger.warning(f'{msg_prefix}expecting action "{expected_action}", '
-                           f'but interrupted by "{resp["action"]}"')
+            logger.debug(f'{msg_prefix}expecting action "{expected_action}", '
+                         f'but interrupted by "{resp["action"]}"')
             return resp
 
         if 'action' not in resp or resp['action'] != expected_action:
@@ -226,7 +226,7 @@ async def send_message(ws, obj, raise_exceptions=True, timeout=None, msg_prefix=
             await ws.send(json.dumps(obj))
         return True
     except websockets.exceptions.ConnectionClosed:
-        logger.warning(f'{msg_prefix}connection closed')
+        logger.info(f'{msg_prefix}connection closed')
         if raise_exceptions:
             raise
         else:
@@ -262,14 +262,14 @@ async def wait_for_command(queue, expected_action,
             else:
                 cmd = await queue.get()
         except asyncio.TimeoutError:
-            logger.warning(f'{msg_prefix}expected command "{expected_action}" timed out')
+            logger.debug(f'{msg_prefix}expected command "{expected_action}" timed out')
             return {}
 
         action = cmd['action']
 
         if action in interrupters:
-            logger.warning(f'{msg_prefix}expecting command "{expected_action}", '
-                           f'but interrupted by "{action}"')
+            logger.debug(f'{msg_prefix}expecting command "{expected_action}", '
+                         f'but interrupted by "{action}"')
             return cmd
 
         if action != expected_action:
@@ -333,7 +333,7 @@ async def user_session_wait_for_opponent(ws, me):
                 await ws.ping()
                 await matchmaker_livecheck_queue.put((me, True))
             except websockets.exceptions.ConnectionClosed:
-                logger.warning(f'{me}: connection closed')
+                logger.info(f'{me}: connection closed')
                 await matchmaker_livecheck_queue.put((me, False))
                 return None
         else:
