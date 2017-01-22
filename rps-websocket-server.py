@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import asyncio
 import collections
 import configparser
@@ -552,6 +553,13 @@ def sslcontext():
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--debug', action='store_true')
+    args = parser.parse_args()
+
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+
     ev = asyncio.get_event_loop()
     ev.run_until_complete(websockets.serve(user_session, '0.0.0.0', PORT, ssl=sslcontext()))
     asyncio.ensure_future(matchmaker(), loop=ev)
