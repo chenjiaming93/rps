@@ -70,8 +70,16 @@ $(function () {
   var waitForGame = function () {
     $logonForm.hide()
     $gameContainer.hide()
-    $waiting.html('Logged in as <span></span>.<br>Waiting for opponent...')
-    $waiting.find('span').text(me)
+    $waiting.html('Logged in as <span id="name"></span>.<br>' +
+                  'Waiting for opponent...<br><br>' +
+                  '<div style="font-size:90%">' +
+                  'Tired of waiting? <span id="bot-request" class="clickable" style="text-decoration:underline">Battle a bot right now</span>.<br>' +
+                  'Unhappy with your name? Use the "Logoff" button.' +
+                  '</div>')
+    $waiting.find('span#name').text(me)
+    $waiting.find('span#bot-request').click(function () {
+      sendMessage({action: 'bot_request'})
+    })
     $waiting.show()
     sendMessage({action: 'standby'})
   }
@@ -122,7 +130,7 @@ $(function () {
     popOver(failedToConnectMessage)
   }
 
-  ws.onclose = function (e) {
+  ws.onclose = function () {
     // Stupidly enough, when the websocket can't connect, Safari triggers
     // onclose instead of onerror (http://stackoverflow.com/q/26594331), and
     // it's hard to distinguish that from a dropped connection (e.g.,

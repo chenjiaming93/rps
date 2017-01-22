@@ -2,7 +2,6 @@
 
 import argparse
 import asyncio
-import collections
 import configparser
 import enum
 import json
@@ -13,6 +12,9 @@ import ssl
 import sys
 import time
 import uuid
+from random import SystemRandom
+# Use random.SystemRandom as generator to make bot moves unguessable
+random = SystemRandom()
 
 import websockets
 
@@ -32,12 +34,11 @@ logging.basicConfig(
 logger = logging.getLogger('rps')
 logger.setLevel(logging.INFO)
 
+ev = asyncio.get_event_loop()
+
 matchmaker_queue = asyncio.Queue()
 matchmaker_livecheck_queue = asyncio.Queue()
 judge_queue = asyncio.Queue()
-user_cmd_queues = {}  # keyed by uids
-opponents = {}  # keyed by uids
-games = {}  # keyed by uids; the same Game object is shared by the two competing users
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 CONFIGFILE = os.path.join(HERE, 'conf.ini')
@@ -47,6 +48,30 @@ ENABLE_SSL = CONFIG.getboolean('ssl', 'enable_ssl', fallback=False)
 CERTFILE = CONFIG.get('ssl', 'certfile', fallback='')
 KEYFILE = CONFIG.get('ssl', 'keyfile', fallback=None)
 PORT = CONFIG.getint('server', 'port', fallback=8443 if ENABLE_SSL else 8080)
+
+
+class User(object):
+    # affiliation is an optional User object used for bots, indicating
+    # which human user the bot is spawned for.
+    def __init__(self, uid, name, affiliation=None):
+        self.uid = uid
+        self.name = name
+        self.affiliation = affiliation
+
+        self.queue = asyncio.Queue()
+        self.opponent = None
+        self.game = None
+
+        self.dropped = False  # Set to True at the end of user session
+
+    def __eq__(self, other):
+        if self.__class__ is other.__class__:
+            return self.uid == other.uid
+        else:
+            return NotImplemented
+
+    def __str__(self):
+        return f'{self.uid} "{self.name}"'
 
 
 class Gesture(enum.Enum):
@@ -91,11 +116,6 @@ class Gesture(enum.Enum):
 
     def __str__(self):
         return self._name_
-
-
-class User(collections.namedtuple('User', ['uid', 'name'])):
-    def __str__(self):
-        return f'{self.uid} "{self.name}"'
 
 
 class Game(object):
@@ -308,23 +328,33 @@ async def user_session_logon(ws):
     return me
 
 
-# Returns them, game if successfully paired;
-# Otherwise (connection dropped at some point), returns None.
+# Returns True if successfully paired;
+# Otherwise (connection dropped at some point), returns False.
 async def user_session_wait_for_opponent(ws, me):
-    cmd_queue = user_cmd_queues[me.uid]
-
     # Wait for client's standby message
     resp = await wait_for_message(
         ws, 'standby',
         msg_prefix=me,
     )
     if resp is None:
-        return None
+        return False
 
-    await matchmaker_queue.put(me)
+    async def listen_for_bot_request():
+        resp = await wait_for_message(
+            ws, 'bot_request',
+            msg_prefix=me,
+        )
+        if resp is None:
+            return False
+        # Request a bot
+        await matchmaker_queue.put((me, True))
+
+    await matchmaker_queue.put((me, False))  # Request a human
+    bot_request_listener = asyncio.ensure_future(listen_for_bot_request(), loop=ev)
+
     while True:
         cmd = await wait_for_command(
-            cmd_queue, 'match',
+            me.queue, 'match',
             validity_test=lambda c: 'opponent' in c,
             interrupters=['livecheck'],
             msg_prefix=me,
@@ -336,17 +366,20 @@ async def user_session_wait_for_opponent(ws, me):
             except websockets.exceptions.ConnectionClosed:
                 logger.info(f'{me}: connection closed')
                 await matchmaker_livecheck_queue.put((me, False))
-                return None
+                return False
         else:
             break
-    them = cmd['opponent']
-    game = games[me.uid]
-    return them, game
+
+    # Cancel the bot request listener task if it hasn't finished already
+    bot_request_listener.cancel()
+
+    return True
 
 
 # Returns a bool indicating whether we should continue with another game.
-async def user_session_play_game(ws, me, them, game):
-    cmd_queue = user_cmd_queues[me.uid]
+async def user_session_play_game(ws, me):
+    them = me.opponent
+    game = me.game
 
     # Commence the game
     try:
@@ -393,15 +426,17 @@ async def user_session_play_game(ws, me, them, game):
 
         # Wait for instruction from judge
         cmd = await wait_for_command(
-            cmd_queue, 'endturn',
+            me.queue, 'endturn',
             interrupters=['endgame'],
             msg_prefix=me,
         )
 
         if cmd['action'] == 'endturn':
             last_turn = game.turns[-1]
-            winner = (('me' if last_turn['winner'].uid == me.uid else 'them')
-                      if last_turn['winner'] else '')
+            if last_turn['winner']:
+                winner = 'me' if last_turn['winner'] == me else 'them'
+            else:
+                winner = ''
             opponent_move = last_turn[them.uid]
 
             # Send endturn message to client
@@ -420,9 +455,12 @@ async def user_session_play_game(ws, me, them, game):
             await asyncio.sleep(0.5)
             await send_message(ws, {
                 'action': 'endgame',
-                'winner': 'me' if game.winner.uid == me.uid else 'them',
+                'winner': 'me' if game.winner == me else 'them',
                 'reason': game.special,
             }, msg_prefix=me)
+            # Reset user's opponent and game
+            me.opponent = None
+            me.game = None
             break
         else:
             # Give clients 2 seconds to show this round's result
@@ -431,32 +469,20 @@ async def user_session_play_game(ws, me, them, game):
     return True
 
 
-def remove_user(user):
-    uid = user.uid
-    user_cmd_queues.pop(uid, None)
-    opponents.pop(uid, None)
-    games.pop(uid, None)
-
-
 async def user_session(ws, path):
     me = await user_session_logon(ws)
     if me is None:
         return
 
     try:
-        # Initialize user command queue
-        cmd_queue = asyncio.Queue()
-        user_cmd_queues[me.uid] = cmd_queue
-
         while True:
             # Wait for matchmaking
-            result = await user_session_wait_for_opponent(ws, me)
-            if result is None:
+            paired = await user_session_wait_for_opponent(ws, me)
+            if not paired:
                 break
-            them, game = result
 
             # Play game
-            keep_going = await user_session_play_game(ws, me, them, game)
+            keep_going = await user_session_play_game(ws, me)
             if not keep_going:
                 break
     except websockets.exceptions.ConnectionClosed:
@@ -473,26 +499,110 @@ async def user_session(ws, path):
         judge_queue.put((me, 'leave'))
     finally:
         await ws.close()
+        me.dropped = True
         logger.info(f'dropped {me}')
 
-        # Wait for a while so that judge could pick up cleanup messages related
-        # to this user.
-        await asyncio.sleep(30)
-        remove_user(me)
+
+# Spawn a bot to be matched against the given user
+def spawn_bot(user):
+    BOTNAMES = [
+        'Abathur',
+        'Alarak',
+        'Aldaris',
+        'Alexei Stukov',
+        'Amon',
+        'Arcturus Mengsk',
+        'Ariel Hanson',
+        'Artanis',
+        'Daggoth',
+        'Dehaka',
+        'Edmund Duke',
+        'Egon Stetmann',
+        'Emil Narud',
+        'Fenix',
+        'Gabriel Tosh',
+        'Gerard DuGalle',
+        'Horace Warfield',
+        'Jim Raynors',
+        'Karax',
+        'Matt Horner',
+        'Nova Terra',
+        'Raszagal',
+        'Rohana',
+        'Rory Swann',
+        'Samir Duran',
+        'Sarah Kerrigan',
+        'Selendis',
+        'Tassadar',
+        'The Overmind',
+        'Tychus Findlay',
+        'Valerian Mengsk',
+        'Zagara',
+        'Zasz',
+        'Zeratul',
+        'Zurvan',
+    ]
+    return User(generate_uid(), random.choice(BOTNAMES), affiliation=user)
+
+
+async def bot_session(bot):
+    try:
+        cmd = await wait_for_command(
+            bot.queue, 'match',
+            interrupters=['terminate'],
+            msg_prefix=bot,
+        )
+        if cmd['action'] == 'terminate':
+            return
+
+        while True:
+            move = Gesture(random.randrange(3))
+            await judge_queue.put((bot, move))
+            await wait_for_command(
+                bot.queue, 'endturn',
+                interrupters=['endgame'],
+                msg_prefix=bot,
+            )
+            if bot.game.winner:
+                break
+    finally:
+        bot.dropped = True
+        logger.info(f'bot {bot}: mission complete')
 
 
 async def matchmaker():
     waiting = None
     while True:
-        new_user = await matchmaker_queue.get()
+        # If a bot is waiting, kick it out
+        if waiting is not None and waiting.affiliation is not None:
+            await waiting.queue.put({'action': 'terminate'})
+            waiting = None
+
+        new_user, bot_request = await matchmaker_queue.get()
+
+        on_hold = None
+        if bot_request:
+            # We put new_user into waiting mode (if not already) and
+            # spawn a bot as the new user for the matchmaker to assign
+            if waiting is None:
+                waiting = new_user
+            # If another user is currently waiting in line, put them on hold
+            elif waiting != new_user:
+                on_hold = waiting
+                waiting = new_user
+
+            bot = spawn_bot(new_user)
+            asyncio.ensure_future(bot_session(bot), loop=ev)
+            new_user = bot
+
         if waiting is not None:
             # Make sure waiting is still alive
-            await user_cmd_queues[waiting.uid].put({'action': 'livecheck'})
+            await waiting.queue.put({'action': 'livecheck'})
             try:
                 while True:
                     user, live = await asyncio.wait_for(matchmaker_livecheck_queue.get(),
                                                         timeout=10)
-                    if user.uid != waiting.uid:
+                    if user != waiting:
                         logger.warning(f'matchmaker: livechecking {waiting} '
                                        f'but heard from {user} instead; ignored')
                         continue
@@ -509,47 +619,54 @@ async def matchmaker():
 
             u1 = waiting
             u2 = new_user
-            opponents[u1.uid] = u2
-            opponents[u2.uid] = u1
+            u1.opponent = u2
+            u2.opponent = u1
             game = Game(u1, u2)
-            games[u1.uid] = game
-            games[u2.uid] = game
-            await user_cmd_queues[u1.uid].put({'action': 'match', 'opponent': u2})
-            await user_cmd_queues[u2.uid].put({'action': 'match', 'opponent': u1})
+            u1.game = game
+            u2.game = game
+            await u1.queue.put({'action': 'match', 'opponent': u2})
+            await u2.queue.put({'action': 'match', 'opponent': u1})
             logger.info(f'match made: {u1} and {u2}')
             waiting = None
             continue
         else:
             waiting = new_user
 
+        # Restore the on-hold user, if any
+        if on_hold:
+            waiting = on_hold
+
 
 async def judge():
     outstanding = {}
     while True:
         user, move = await judge_queue.get()
-        if user.uid in opponents:
-            opponent = opponents[user.uid]
-        else:
+
+        if user.dropped:
             # For some reason we received a move from a since-dropped
             # user. Not sure why this would happen, but it happened once
             # in private testing, so let's guard against it lest the
             # judge be brought down.
-            logger.warning(f'judge: received move from dropped uid {user.uid}')
+            logger.warning(f'judge: received move from dropped user {user}; ignored')
             continue
 
-        # Similarly, we check to make sure opponent still exists
-        if opponent.uid not in opponents:
-            # Opponent doesn't exist anymore! And somehow did not send a
+        opponent = user.opponent
+        if not opponent:
+            # This is also unexpected, but better be safe than sorry
+            logger.warning(f'judge: received move from user {user} '
+                           f'who isn\'t paired to anyone; ignored')
+            continue
+
+        # Similarly, we check if the opponent has been dropped
+        if opponent.dropped:
+            # Opponent has been dropped! And somehow they did not send a
             # farewell message or the message was somehow eaten. Damn.
             logger.warning(f'judge: the opponent {opponent} of {user}'
                            f'appears to have been dropped')
-            game = games[user.uid]
-            game.winner = user
-            game.special = 'leave'
+            user.game.winner = user
+            user.game.special = 'leave'
             outstanding.pop(opponent.uid, None)
-            games.pop(user.uid, None)
-            games.pop(opponent.uid, None)
-            await user_cmd_queues[user.uid].put({'action': 'endgame'})
+            await user.queue.put({'action': 'endgame'})
             continue
 
         if opponent.uid in outstanding:
@@ -558,28 +675,24 @@ async def judge():
             u2 = opponent
             move2 = outstanding[u2.uid]
             outstanding.pop(opponent.uid)
-            game = games[u1.uid]
-            if game.user1.uid != u1.uid:
+
+            game = u1.game
+            if game.user1 != u1:
                 u2, u1 = u1, u2
                 move2, move1 = move1, move2
 
             if move1 in ['leave', 'surrender']:
                 game.winner = u2
                 game.special = move1
-                await user_cmd_queues[u2.uid].put({'action': 'endgame'})
+                await u2.queue.put({'action': 'endgame'})
             elif move2 in ['leave', 'surrender']:
                 game.winner = u1
                 game.special = move2
-                await user_cmd_queues[u1.uid].put({'action': 'endgame'})
+                await u1.queue.put({'action': 'endgame'})
             else:
                 game.turn(move1, move2)
-                await user_cmd_queues[u1.uid].put({'action': 'endturn'})
-                await user_cmd_queues[u2.uid].put({'action': 'endturn'})
-
-            if game.winner is not None:
-                # Game finished
-                games.pop(u1.uid)
-                games.pop(u2.uid)
+                await u1.queue.put({'action': 'endturn'})
+                await u2.queue.put({'action': 'endturn'})
         else:
             outstanding[user.uid] = move
 
@@ -602,7 +715,6 @@ def main():
     if args.debug:
         logger.setLevel(logging.DEBUG)
 
-    ev = asyncio.get_event_loop()
     ev.run_until_complete(websockets.serve(user_session, '0.0.0.0', PORT, ssl=sslcontext()))
     asyncio.ensure_future(matchmaker(), loop=ev)
     asyncio.ensure_future(judge(), loop=ev)
